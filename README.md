@@ -16,7 +16,7 @@ As an initial proof of concept, this repo implements three main things:
 
 **run_lle.py** connects everything together by calling on functions from each of the aforementioned files 
 
-    *Note that the values for X, K, sigma, n_samples, and rng can be changed to test different scenarios.*
+Note that the values for X, K, sigma, n_samples, and rng can be changed to test different scenarios.
 
 **To run:**
 python -m run_lle
