@@ -1,15 +1,21 @@
 **This repo checks if the code can generate perturbations, select the k-nearest same-decision neighbours and compute the LLE reconstruction weights given a numeric input "x" in a black-box classifier.**
-##As an initial proof of concept, this repo implements three main things: 
+
+As an initial proof of concept, this repo implements three main things: 
 
 1) Perturbations: Given an input X, generate perturbations to find synthetic samples. 
 2) K-nearest neighbourhood selection: Query the classifier for the samples, retain samples with the same label as X, and select the k nearest neighbours using euclidean distance. 
 3) LLE reconstruction: Compute the weights needed to reconstruct X based on the selected neighbours.
 
 **model.py** produces the label for an input 
+
 **perturbations.py** samples around x 
+
 **neighbours.py** finds the k-nearest sample points with the same label as x 
+
 **lle.py** computes the reconstruction weights using lle
+
 **run_lle.py** connects everything together by calling on functions from each of the aforementioned files 
+
     *Note that the values for X, K, sigma, n_samples, and rng can be changed to test different scenarios.*
 
 **To run:**
