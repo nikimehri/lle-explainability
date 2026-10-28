@@ -1,6 +1,6 @@
 import numpy as np 
 
-from model import predict
+from model import predict, predict_probability
 from perturbations import generate_perturbation
 from neighbours import select_neighbours
 from lle import compute_lle_weights
@@ -20,8 +20,9 @@ def main():
     neighbours, distances = select_neighbours(
         X = X, 
         samples = samples,
-        predict_fn = predict,
+        predict_proba_fn = predict_probability,
         K = K,
+        n_candidates = 100,
     )
     weights = compute_lle_weights(X, neighbours)
     reconstructed=weights @ neighbours
@@ -31,7 +32,9 @@ def main():
     print(f"Reconstruction error: {error}")
     print("Number of neighbors:", len(neighbours))
     print("Original label:", predict(X.reshape(1, -1))[0])
+    print("Original probability:", predict_probability(X.reshape(1, -1))[0])
     print("Neighbor labels:", predict(neighbours))
+    print("Neighbor probabilities:", predict_probability(neighbours))
     print("LLE weights:", weights)
     print("Sum of weights:", np.sum(weights))
     print("Neighbor distances:", distances)
