@@ -1,61 +1,82 @@
-import numpy as np 
-
+import numpy as np
+from dataclasses import dataclass
 
 from perturbations import generate_perturbation
 from neighbours import select_neighbours
 from lle import compute_lle_weights, build_weight_matrix, lle_embedding
 from model import get_model
 
-"""The values for X, K, sigma, n_samples, and rng can be changed to test different scenarios."""
+"""The values in LLEConfig can be changed to test different scenarios. report_lle.py uses this same config and pipeline."""
 
-def main():
-    rng=np.random.default_rng(42)
+@dataclass(frozen = True)
+class LLEConfig:
+    row : int = 86              # boundary row
+    K : int = 100               # neighbours kept around X
+    k_graph : int = 15          # neighbours per point when building W within P; must be < K + 1
+    d : int = 3                 # embedding dimension; must be < input dimension
+    n_samples : int = 5000     # perturbations drawn around X
+    sigma : float = 0.3        # perturbation scale 
+    seed : int = 42
+
+
+def run_lle(config : LLEConfig = LLEConfig()) -> dict:
+    """Perturb X, select neighbours, compute X's LLE reconstruction weights, then build W over P = [X] + neighbours and embed it."""
+    rng = np.random.default_rng(config.seed)
     rf, data, target = get_model()
-    row = 86  # boundary row: forest probabilities ~0.63 / 0.37
-    X = data[row]
+    X = data[config.row]
     c = rf.predict(X.reshape(1, -1))[0]
     proba_fn = lambda x: rf.predict_proba(x)[:, c]
-    #X = np.array([0.5, 0.6])
-    K = 100 
-    k_graph = 15  # neighbours per point when building W within P; must be < K + 1
-    d = 3  # embedding dimension; must be < input dimension
     samples = generate_perturbation(
-        X = X, 
-        n_samples = 50000,
-        sigma = 0.1, 
-        rng=rng, 
+        X = X,
+        n_samples = config.n_samples,
+        sigma = config.sigma,
+        rng = rng,
     )
-    neighbours, distances = select_neighbours(
-        X = X, 
+    neighbours = select_neighbours(
+        X = X,
         samples = samples,
         predict_proba_fn = proba_fn,
-        K = K,
-        n_candidates = 20000
+        K = config.K,
     )
+    distances = np.linalg.norm(neighbours - X, axis=1)  # reporting only
     weights = compute_lle_weights(X, neighbours)
-    reconstructed=weights @ neighbours
-    error = np.linalg.norm(X - reconstructed)
-    print(f"Original point: {X}")
-    print(f"Reconstructed point: {reconstructed}")
-    print(f"Reconstruction error: {error}")
-    print("Number of neighbors:", len(neighbours))
-    print("Original label:", rf.predict(X.reshape(1, -1))[0])
-    print("Original probability:", rf.predict_proba(X.reshape(1, -1))[:, c][0])
-    print("Neighbor labels:", rf.predict(neighbours))
-    print("Neighbor probabilities:", rf.predict_proba(neighbours)[:, c])
-    print("LLE weights:", weights)
-    print("Sum of weights:", np.sum(weights))
-    print("Neighbor distances:", distances)
+    reconstructed = weights @ neighbours
 
     # Low-dimensional embedding of the local set P = [X] + neighbours (row 0 is X)
     P = np.vstack([X, neighbours])
-    W = build_weight_matrix(P, k_graph)
-    Y = lle_embedding(W, d)
+    W = build_weight_matrix(P, config.k_graph)
+    Y = lle_embedding(W, config.d)
+    return {
+        "config" : config, "rf" : rf, "X" : X, "label" : c, "true_label" : int(target[config.row]),
+        "prob_X" : float(rf.predict_proba(X.reshape(1, -1))[0, c]),
+        "neighbours" : neighbours, "distances" : distances,
+        "neighbour_label" : rf.predict(neighbours), "neighbour_prob" : rf.predict_proba(neighbours)[:, c],
+        "weights" : weights, "reconstructed" : reconstructed,
+        "error" : float(np.linalg.norm(X - reconstructed)),
+        "P" : P, "W" : W, "Y" : Y,
+        "embedding_cost" : float(np.sum((Y - W @ Y) ** 2)),
+    }
+
+
+def main():
+    r = run_lle()
+    print(f"Original point: {r['X']}")
+    print(f"Reconstructed point: {r['reconstructed']}")
+    print(f"Reconstruction error: {r['error']}")
+    print("Number of neighbors:", len(r["neighbours"]))
+    print("Original label:", r["label"])
+    print("Original probability:", r["prob_X"])
+    print("Neighbor labels:", r["neighbour_label"])
+    print("Neighbor probabilities:", r["neighbour_prob"])
+    print("LLE weights:", r["weights"])
+    print("Sum of weights:", np.sum(r["weights"]))
+    print("Neighbor distances:", r["distances"])
+    Y = r["Y"]
     print("Embedding of X:", Y[0])
     print("Embedding of neighbours:", Y[1:].ravel())
     print("Embedding mean (should be ~0):", Y.mean(axis=0))
     print("Embedding covariance (should be ~I):", Y.T @ Y / len(Y))
-    print("Embedding cost:", np.sum((Y - W @ Y) ** 2))
+    print("Embedding cost:", r["embedding_cost"])
 
 
 if __name__ == "__main__":
