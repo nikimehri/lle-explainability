@@ -1,26 +1,26 @@
-**This repo checks if the code can generate perturbations, select the k-nearest same-decision neighbours and compute the LLE reconstruction weights given a numeric input "x" in a black-box classifier.**
+**This is the repo for PaLLE (Paths through Locally Linear Embeddings for Feature Explanation).**
 
-As an initial proof of concept, this repo implements three main things: 
+PaLLE selects perturbations with model predictions similar to a given input and organizes them using Locally Linear Embedding. It then decodes paths through this representation to examine joint feature changes, check whether predictions are preserved, and estimate each feature's contribution along the path.
 
-1) Perturbations: Given an input X, generate perturbations to find synthetic samples. 
-2) K-nearest neighbourhood selection: Query the classifier for the samples, retain samples with the same label as X, and select the k nearest neighbours using euclidean distance. 
-3) LLE reconstruction: Compute the weights needed to reconstruct X based on the selected neighbours.
+**Data:**
 
-**model.py** produces the label for an input 
+Breast Cancer is included with scikit-learn through `sklearn.datasets.load_breast_cancer()` and is loaded automatically.
 
-**perturbations.py** samples around x 
+Download [Spambase](https://archive.ics.uci.edu/dataset/94/spambase) and save the archive to `data/spambase/spambase.zip`.
 
-**neighbours.py** finds the k-nearest sample points with the same label as x 
+Download [Airfoil Self-Noise](https://archive.ics.uci.edu/dataset/291/airfoil+self+noise) and extract `airfoil_self_noise.dat` to `data/airfoil/`.
 
-**lle.py** computes the reconstruction weights using lle
-
-**run_lle.py** connects everything together by calling on functions from each of the aforementioned files 
-
-Note that the values for X, K, sigma, n_samples, and rng can be changed to test different scenarios.
+HMDA: [download here](https://ffiec.cfpb.gov/data-browser/).
 
 **To run:**
-python -m run_lle
 
-**Next steps:**
-Find an appropriate dataset and train a non-linear classifier. Then, given a real observation, find a local neighbourhood of inputs sharing the same decision label and compute LLE reconstruction weights to approximate the original input. 
+```sh
+python3 -m pip install -r requirements.txt
+python3 experiments.py classification --datasets breast_cancer
+python3 experiments.py classification --datasets spambase
+python3 experiments.py airfoil
+```
 
+**Hyperparameters:**
+
+Note that the values for `n_samples`, `K`, `k_graph`, `d`, `sigma`, reconstruction regularization `reg`, decoder `alpha` and `gamma`, evaluation tolerances, seeds, validation grids and MLP decoder settings can be changed in **DEFAULTS** in **experiments.py**. Classifier architecture and learning-rate defaults are in **model_data** in **evaluate_full_feature.py**. These can be changed to test different scenarios. Use a new `--output` directory when changing settings, e.g. `--output research/generated/my_run`.

@@ -4,6 +4,7 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.decomposition import PCA
 from sklearn.kernel_ridge import KernelRidge
+from sklearn.linear_model import Ridge
 
 from lle import build_weight_matrix, compute_lle_weights, lle_embedding
 from neighbours import select_neighbours
@@ -28,6 +29,22 @@ class NonlinearDecoder:
         return self.model.dual_coef_.T @ derivatives
 
 
+class LinearDecoder:
+    """Affine ridge reconstruction with the same query correction as the RBF decoder."""
+
+    def __init__(self, points, embedding, alpha=.01):
+        self.query = points[0].copy()
+        self.query_coordinate = embedding[0].copy()
+        self.alpha = alpha
+        self.model = Ridge(alpha=alpha, fit_intercept=False, solver="svd").fit(embedding, points - self.query)
+
+    def predict(self, coordinates):
+        return self.query + self.model.predict(np.atleast_2d(coordinates) - self.query_coordinate)
+
+    def jacobian(self, coordinate):
+        return self.model.coef_.copy()
+
+
 def finite_sensitivities(probability_fn, points, step):
     offsets = step * np.eye(points.shape[1])
     plus = (points[:, None, :] + offsets[None, :, :]).reshape(-1, points.shape[1])
@@ -38,9 +55,10 @@ def finite_sensitivities(probability_fn, points, step):
 def original_core(query, probability_fn, config):
     candidates = generate_perturbation(query, config.n_samples, config.sigma, np.random.default_rng(config.seed))
     neighbours = select_neighbours(query, candidates, probability_fn, config.K)
-    query_weights = compute_lle_weights(query, neighbours)
+    reg = getattr(config, "reg", 1e-3)
+    query_weights = compute_lle_weights(query, neighbours, reg=reg)
     points = np.vstack([query, neighbours])
-    weights = build_weight_matrix(points, config.k_graph)
+    weights = build_weight_matrix(points, config.k_graph, reg=reg)
     embedding = lle_embedding(weights, config.d)
     return {"P": points, "W": weights, "Y": embedding, "weights": query_weights, "candidates": candidates}
 
@@ -50,11 +68,11 @@ def independent_selected(query, probability_fn, config, seed):
     return select_neighbours(query, candidates, probability_fn, config.K)
 
 
-def extend_coordinates(points, core, count):
+def extend_coordinates(points, core, count, reg=1e-3):
     coordinates = []
     for point in points:
         indices = np.argsort(np.linalg.norm(core["P"] - point, axis=1), kind="stable")[:count]
-        weights = compute_lle_weights(point, core["P"][indices])
+        weights = compute_lle_weights(point, core["P"][indices], reg=reg)
         coordinates.append(weights @ core["Y"][indices])
     return np.array(coordinates)
 
